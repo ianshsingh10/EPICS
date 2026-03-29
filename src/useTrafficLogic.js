@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-// ✅ Only ONE direction active at a time
-const PHASES = ["N_GREEN", "N_YELLOW", "S_GREEN", "S_YELLOW", "E_GREEN", "E_YELLOW", "W_GREEN", "W_YELLOW"];
+const PHASES = ["N_GREEN", "N_YELLOW", "E_GREEN", "E_YELLOW", "S_GREEN", "S_YELLOW", "W_GREEN", "W_YELLOW"];
 
 export function useTrafficLogic() {
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -18,7 +17,6 @@ export function useTrafficLogic() {
   const nextVehicleId = useRef(0);
   const tickRef = useRef(null);
 
-  // 🚗 Spawn vehicle in random lane
   const spawnVehicle = useCallback((direction, type, color) => {
     const laneTypes = ["left", "straight", "right"];
     const lane = laneTypes[Math.floor(Math.random() * 3)];
@@ -40,7 +38,6 @@ export function useTrafficLogic() {
     }));
   }, []);
 
-  // ❌ Remove vehicle
   const removeVehicleFromQueue = useCallback((direction, laneType, vehicleId) => {
     setQueues(prev => ({
       ...prev,
@@ -59,7 +56,6 @@ export function useTrafficLogic() {
   const tick = useCallback(() => {
     const currentPhase = PHASES[phaseIndex];
 
-    // 🚗 Random spawning
     if (Math.random() > 0.6) {
       const directions = ["N", "S", "E", "W"];
       const dir = directions[Math.floor(Math.random() * directions.length)];
@@ -78,13 +74,11 @@ export function useTrafficLogic() {
       const nextPhase = PHASES[nextIndex];
       setPhaseIndex(nextIndex);
 
-      // 🟡 Yellow phase
       if (nextPhase.includes("YELLOW")) {
         setTimeRemaining(3);
       } 
-      // 🟢 Green phase → dynamic timing per direction
       else {
-        const dir = nextPhase[0]; // N / S / E / W
+        const dir = nextPhase[0];
         const cars = getLaneCount(dir);
 
         setTimeRemaining(Math.min(25, Math.max(6, cars * 2 + 3)));

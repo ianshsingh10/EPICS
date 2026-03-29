@@ -100,6 +100,16 @@ function LaneVehicles({ queue, signalState, layout, directionId, removeVehicle }
   const meshRefs = useRef({});
   const posData = useRef({});
 
+  React.useEffect(() => {
+    const currentIds = new Set(queue.map(v => v.id));
+    Object.keys(posData.current).forEach(id => {
+      if (!currentIds.has(Number(id))) {
+        delete posData.current[id];
+        delete meshRefs.current[id];
+      }
+    });
+  }, [queue]);
+
   const getBumperOffset = (type) => {
     if (type === 'bus') return 3.0;
     if (type === 'suv') return 1.9;
@@ -139,10 +149,9 @@ function LaneVehicles({ queue, signalState, layout, directionId, removeVehicle }
           if (pData.z > bounds) pData.z = bounds;
       }
       
-      if (pData.z > 50) {
+      if (pData.z > 50 && !pData.removed) {
           removeVehicle(directionId, v.id);
-          delete posData.current[v.id];
-          return;
+          pData.removed = true;
       }
       
       const mesh = meshRefs.current[v.id];
@@ -303,15 +312,9 @@ export default function World({ logic }) {
   const { phase, queues, removeVehicleFromQueue } = logic;
 
   const getSignalState = (dir) => {
-     if (dir === 'N' || dir === 'S') {
-        if (phase === 'NS_GREEN') return 'GREEN';
-        if (phase === 'NS_YELLOW') return 'YELLOW';
-        return 'RED';
-     } else {
-        if (phase === 'EW_GREEN') return 'GREEN';
-        if (phase === 'EW_YELLOW') return 'YELLOW';
-        return 'RED';
-     }
+     if (phase === `${dir}_GREEN`) return 'GREEN';
+     if (phase === `${dir}_YELLOW`) return 'YELLOW';
+     return 'RED';
   };
 
   const lanesLayout = {

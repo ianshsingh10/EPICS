@@ -117,11 +117,23 @@ function LaneVehicles({
   const meshRefs = useRef({});
   const posData = useRef({});
 
+<<<<<<< HEAD
   const laneOffsets = {
     left: -2,
     straight: 0,
     right: 2,
   };
+=======
+  React.useEffect(() => {
+    const currentIds = new Set(queue.map(v => v.id));
+    Object.keys(posData.current).forEach(id => {
+      if (!currentIds.has(Number(id))) {
+        delete posData.current[id];
+        delete meshRefs.current[id];
+      }
+    });
+  }, [queue]);
+>>>>>>> 0cbf695c8a6aff8fb9a37154853e6891626c8836
 
   const getBumperOffset = (type) => {
     if (type === "bus") return 3.0;
@@ -165,6 +177,7 @@ function LaneVehicles({
         if (pData.z < bounds) {
           pData.z += speed * delta;
           if (pData.z > bounds) pData.z = bounds;
+<<<<<<< HEAD
         }
 
         if (pData.z > 50) {
@@ -250,6 +263,20 @@ function LaneVehicles({
           mesh.position.y = pData.z < bounds ? Math.sin(pData.z * 3) * 0.04 : 0;
         }
       });
+=======
+      }
+      
+      if (pData.z > 50 && !pData.removed) {
+          removeVehicle(directionId, v.id);
+          pData.removed = true;
+      }
+      
+      const mesh = meshRefs.current[v.id];
+      if (mesh) {
+          mesh.position.z = pData.z;
+          mesh.position.y = (pData.z < bounds) ? Math.sin(pData.z * 3) * 0.04 : 0;
+      }
+>>>>>>> 0cbf695c8a6aff8fb9a37154853e6891626c8836
     });
   });
 
@@ -445,6 +472,7 @@ export default function World({ logic }) {
   const { phase, queues, removeVehicleFromQueue } = logic;
 
   const getSignalState = (dir) => {
+<<<<<<< HEAD
     const currentDir = phase[0];
 
     if (phase.includes("GREEN")) {
@@ -456,6 +484,11 @@ export default function World({ logic }) {
     }
 
     return "RED";
+=======
+     if (phase === `${dir}_GREEN`) return 'GREEN';
+     if (phase === `${dir}_YELLOW`) return 'YELLOW';
+     return 'RED';
+>>>>>>> 0cbf695c8a6aff8fb9a37154853e6891626c8836
   };
 
   const lanesLayout = {

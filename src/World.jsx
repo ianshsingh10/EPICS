@@ -1,7 +1,7 @@
-import React, { useRef, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
-import * as THREE from 'three';
+import React, { useRef, useMemo } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, Environment, ContactShadows } from "@react-three/drei";
+import * as THREE from "three";
 
 function Tree({ position, scale = 1 }) {
   const trunkHeight = 1.5 * scale;
@@ -12,7 +12,10 @@ function Tree({ position, scale = 1 }) {
         <cylinderGeometry args={[0.2 * scale, 0.3 * scale, trunkHeight, 8]} />
         <meshStandardMaterial color="#4d3319" roughness={0.9} />
       </mesh>
-      <mesh castShadow position={[0, trunkHeight + leavesSize / 2 - 0.5 * scale, 0]}>
+      <mesh
+        castShadow
+        position={[0, trunkHeight + leavesSize / 2 - 0.5 * scale, 0]}
+      >
         <dodecahedronGeometry args={[leavesSize / 2, 1]} />
         <meshStandardMaterial color="#2d5e1e" roughness={0.8} />
       </mesh>
@@ -26,27 +29,35 @@ function EnvironmentDetails() {
     const minD = 15;
     const maxD = 40;
     for (let i = 0; i < 60; i++) {
-        const x = (Math.random() > 0.5 ? 1 : -1) * (minD + Math.random() * (maxD - minD));
-        const z = (Math.random() > 0.5 ? 1 : -1) * (minD + Math.random() * (maxD - minD));
-        const scale = 0.5 + Math.random() * 0.8;
-        t.push({ position: [x, 0, z], scale });
+      const x =
+        (Math.random() > 0.5 ? 1 : -1) * (minD + Math.random() * (maxD - minD));
+      const z =
+        (Math.random() > 0.5 ? 1 : -1) * (minD + Math.random() * (maxD - minD));
+      const scale = 0.5 + Math.random() * 0.8;
+      t.push({ position: [x, 0, z], scale });
     }
     return t;
   }, []);
 
   return (
     <group>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.15, 0]}>
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.15, 0]}
+      >
         <planeGeometry args={[150, 150]} />
         <meshStandardMaterial color="#3a5f2d" roughness={1} />
       </mesh>
-      {trees.map((t, i) => <Tree key={i} position={t.position} scale={t.scale} />)}
+      {trees.map((t, i) => (
+        <Tree key={i} position={t.position} scale={t.scale} />
+      ))}
     </group>
   );
 }
 
 function VehicleModel({ type, color }) {
-  if (type === 'bus') {
+  if (type === "bus") {
     return (
       <group position={[0, 1.2, 0]}>
         <mesh castShadow receiveShadow>
@@ -60,7 +71,7 @@ function VehicleModel({ type, color }) {
       </group>
     );
   }
-  if (type === 'suv') {
+  if (type === "suv") {
     return (
       <group position={[0, 0.7, 0]}>
         <mesh castShadow receiveShadow position={[0, -0.2, 0]}>
@@ -96,86 +107,173 @@ function VehicleModel({ type, color }) {
   );
 }
 
-function LaneVehicles({ queue, signalState, layout, directionId, removeVehicle }) {
+function LaneVehicles({
+  lanes,
+  signalState,
+  layout,
+  directionId,
+  removeVehicle,
+}) {
   const meshRefs = useRef({});
   const posData = useRef({});
 
+  const laneOffsets = {
+    left: -2,
+    straight: 0,
+    right: 2,
+  };
+
   const getBumperOffset = (type) => {
-    if (type === 'bus') return 3.0;
-    if (type === 'suv') return 1.9;
+    if (type === "bus") return 3.0;
+    if (type === "suv") return 1.9;
     return 1.6;
   };
 
   useFrame((state, delta) => {
-    const speed = 15; 
-    const stopLineWorldZ = -6.0; 
-    
-    queue.forEach((v, index) => {
-      let pData = posData.current[v.id];
-      if (!pData) {
-         pData = { z: -50 }; 
-         posData.current[v.id] = pData;
-      }
-      
-      let bounds = Infinity;
-      const bumperOffset = getBumperOffset(v.type);
-      const stopTarget = stopLineWorldZ - bumperOffset - 0.2; 
-      
-      if (signalState !== 'GREEN' && pData.z <= stopTarget) {
+    const speed = 15;
+    const stopLineWorldZ = -6.0;
+
+    Object.entries(lanes || {}).forEach(([laneType, queue]) => {
+      queue.forEach((v, index) => {
+        let pData = posData.current[v.id];
+        if (!pData) {
+          pData = { z: -50 };
+          posData.current[v.id] = pData;
+        }
+
+        let bounds = Infinity;
+        const bumperOffset = getBumperOffset(v.type);
+        const stopTarget = stopLineWorldZ - bumperOffset - 0.2;
+
+        // 🚦 SIGNAL STOP LOGIC
+        const shouldStop = laneType !== "left" && signalState !== "GREEN";
+
+        if (shouldStop && pData.z <= stopTarget) {
           bounds = stopTarget;
-      }
-      
-      if (index > 0) {
-         const frontVehicle = queue[index - 1];
-         const frontPData = posData.current[frontVehicle.id];
-         if (frontPData) {
-             const spacing = frontVehicle.type === 'bus' ? 6.5 : 5.0;
-             bounds = Math.min(bounds, frontPData.z - spacing);
-         }
-      }
-      
-      if (pData.z < bounds) {
+        }
+
+        // 🚗 VEHICLE SPACING
+        if (index > 0) {
+          const frontVehicle = queue[index - 1];
+          const frontPData = posData.current[frontVehicle.id];
+          if (frontPData) {
+            const spacing = frontVehicle.type === "bus" ? 6.5 : 5.0;
+            bounds = Math.min(bounds, frontPData.z - spacing);
+          }
+        }
+
+        if (pData.z < bounds) {
           pData.z += speed * delta;
           if (pData.z > bounds) pData.z = bounds;
-      }
-      
-      if (pData.z > 50) {
-          removeVehicle(directionId, v.id);
+        }
+
+        if (pData.z > 50) {
+          removeVehicle(directionId, laneType, v.id);
           delete posData.current[v.id];
           return;
-      }
-      
-      const mesh = meshRefs.current[v.id];
-      if (mesh) {
-          mesh.position.z = pData.z;
-          mesh.position.y = (pData.z < bounds) ? Math.sin(pData.z * 3) * 0.04 : 0;
-      }
+        }
+
+        const mesh = meshRefs.current[v.id];
+        if (mesh) {
+          if (pData.z <= 0) {
+            mesh.position.z = pData.z;
+            mesh.position.x = laneOffsets[laneType];
+          } else {
+            // 🎯 AFTER CROSSING → TURN WITH SPACING CONTROL
+            if (!pData.turned) {
+              pData.turned = 0;
+            }
+
+            const turnSpeed = 1.5 * delta;
+            const maxTurn = Math.PI / 2; // 90°
+
+            // 🚗 FRONT VEHICLE CHECK (for overlap prevention)
+            let frontVehicle = null;
+            let frontPData = null;
+
+            if (index > 0) {
+              frontVehicle = queue[index - 1];
+              frontPData = posData.current[frontVehicle.id];
+            }
+
+            const turnSpacing = frontVehicle?.type === "bus" ? 6.5 : 4.5;
+
+            if (!pData.progress) pData.progress = pData.z;
+            if (frontPData && !frontPData.progress)
+              frontPData.progress = frontPData.z;
+
+            const tooClose =
+              frontPData && frontPData.progress - pData.progress < turnSpacing;
+
+            if (laneType === "left") {
+              if (!tooClose) {
+                if (pData.turned < maxTurn) {
+                  const step = Math.min(turnSpeed, maxTurn - pData.turned);
+                  mesh.rotation.y += step;
+                  pData.turned += step;
+
+                  if (pData.turned >= maxTurn) {
+                    mesh.rotation.y =
+                      Math.round(mesh.rotation.y / maxTurn) * maxTurn;
+                  }
+                } else {
+                  mesh.position.x -= speed * delta;
+                }
+              }
+              mesh.position.z = 0;
+
+              // 🚦 RIGHT TURN
+            } else if (laneType === "right") {
+              if (!tooClose) {
+                if (pData.turned < maxTurn) {
+                  const step = Math.min(turnSpeed, maxTurn - pData.turned);
+                  mesh.rotation.y -= step;
+                  pData.turned += step;
+
+                  if (pData.turned >= maxTurn) {
+                    mesh.rotation.y =
+                      Math.round(mesh.rotation.y / maxTurn) * maxTurn;
+                  }
+                } else {
+                  mesh.position.x += speed * delta;
+                }
+              }
+              mesh.position.z = 0;
+
+              // 🚗 STRAIGHT
+            } else {
+              mesh.position.z = pData.z;
+              mesh.position.x = laneOffsets[laneType];
+            }
+          }
+
+          mesh.position.y = pData.z < bounds ? Math.sin(pData.z * 3) * 0.04 : 0;
+        }
+      });
     });
   });
 
   return (
     <group position={layout.startPos} rotation={layout.rotation}>
-      {queue.map((v) => (
-        <group key={v.id} ref={(r) => (meshRefs.current[v.id] = r)} position={[0, 0, -50]}>
-          <VehicleModel type={v.type} color={v.color} />
-          {[-0.8, 0.8].map((x, i) =>
-            [-1.2, 1.2].map((z, j) => (
-              <mesh key={`${i}-${j}`} position={[x, 0.3, z]} castShadow>
-                <cylinderGeometry args={[0.3, 0.3, 0.2, 16]} rotation={[0, 0, Math.PI/2]} />
-                <meshStandardMaterial color="#222" />
-              </mesh>
-            ))
-          )}
-        </group>
-      ))}
+      {Object.entries(lanes || {}).map(([laneType, queue]) =>
+        queue.map((v) => (
+          <group
+            key={v.id}
+            ref={(r) => (meshRefs.current[v.id] = r)}
+            position={[laneOffsets[laneType], 0, -50]}
+          >
+            <VehicleModel type={v.type} color={v.color} />
+          </group>
+        )),
+      )}
     </group>
   );
 }
 
 function TrafficLight({ position, rotation, signalState }) {
-  const isRed = signalState === 'RED';
-  const isYellow = signalState === 'YELLOW';
-  const isGreen = signalState === 'GREEN';
+  const isRed = signalState === "RED";
+  const isYellow = signalState === "YELLOW";
+  const isGreen = signalState === "GREEN";
 
   return (
     <group position={position} rotation={rotation}>
@@ -188,16 +286,28 @@ function TrafficLight({ position, rotation, signalState }) {
         <meshStandardMaterial color="#111" />
       </mesh>
       <mesh position={[0.9, 6.8, 0]}>
-         <sphereGeometry args={[0.25, 16, 16]} />
-         <meshStandardMaterial color={isRed ? "#ff2222" : "#330000"} emissive={isRed ? "#ff2222" : "#000000"} emissiveIntensity={isRed ? 2: 0} />
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <meshStandardMaterial
+          color={isRed ? "#ff2222" : "#330000"}
+          emissive={isRed ? "#ff2222" : "#000000"}
+          emissiveIntensity={isRed ? 2 : 0}
+        />
       </mesh>
       <mesh position={[0.9, 6.0, 0]}>
-         <sphereGeometry args={[0.25, 16, 16]} />
-         <meshStandardMaterial color={isYellow ? "#ffcc00" : "#333300"} emissive={isYellow ? "#ffcc00" : "#000000"} emissiveIntensity={isYellow ? 2: 0} />
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <meshStandardMaterial
+          color={isYellow ? "#ffcc00" : "#333300"}
+          emissive={isYellow ? "#ffcc00" : "#000000"}
+          emissiveIntensity={isYellow ? 2 : 0}
+        />
       </mesh>
       <mesh position={[0.9, 5.2, 0]}>
-         <sphereGeometry args={[0.25, 16, 16]} />
-         <meshStandardMaterial color={isGreen ? "#22ff22" : "#003300"} emissive={isGreen ? "#22ff22" : "#000000"} emissiveIntensity={isGreen ? 2: 0} />
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <meshStandardMaterial
+          color={isGreen ? "#22ff22" : "#003300"}
+          emissive={isGreen ? "#22ff22" : "#000000"}
+          emissiveIntensity={isGreen ? 2 : 0}
+        />
       </mesh>
     </group>
   );
@@ -206,19 +316,35 @@ function TrafficLight({ position, rotation, signalState }) {
 function TexturedRoad() {
   return (
     <group>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]}>
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.1, 0]}
+      >
         <planeGeometry args={[100, 100]} />
         <meshStandardMaterial color="#2a2e33" roughness={0.9} />
       </mesh>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.05, 0]}
+      >
         <planeGeometry args={[12, 100]} />
         <meshStandardMaterial color="#1d2024" roughness={0.8} />
       </mesh>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]}>
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.04, 0]}
+      >
         <planeGeometry args={[100, 12]} />
         <meshStandardMaterial color="#1d2024" roughness={0.8} />
       </mesh>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]}>
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.03, 0]}
+      >
         <planeGeometry args={[12, 12]} />
         <meshStandardMaterial color="#181a1d" />
       </mesh>
@@ -255,44 +381,60 @@ function TexturedRoad() {
         <meshStandardMaterial color="#f59e0b" />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -6]}>
-         <planeGeometry args={[12, 0.2]} />
-         <meshStandardMaterial color="#ffffff" />
+        <planeGeometry args={[12, 0.2]} />
+        <meshStandardMaterial color="#ffffff" />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 6]}>
-         <planeGeometry args={[12, 0.2]} />
-         <meshStandardMaterial color="#ffffff" />
+        <planeGeometry args={[12, 0.2]} />
+        <meshStandardMaterial color="#ffffff" />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[6, 0.02, 0]}>
-         <planeGeometry args={[0.2, 12]} />
-         <meshStandardMaterial color="#ffffff" />
+        <planeGeometry args={[0.2, 12]} />
+        <meshStandardMaterial color="#ffffff" />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-6, 0.02, 0]}>
-         <planeGeometry args={[0.2, 12]} />
-         <meshStandardMaterial color="#ffffff" />
+        <planeGeometry args={[0.2, 12]} />
+        <meshStandardMaterial color="#ffffff" />
       </mesh>
       {[-5, -3, -1, 1, 3, 5].map((x, i) => (
-         <mesh key={`n_z_${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.02, -7.5]}>
-            <planeGeometry args={[0.8, 2]} />
-            <meshStandardMaterial color="#ffffff" />
-         </mesh>
+        <mesh
+          key={`n_z_${i}`}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[x, 0.02, -7.5]}
+        >
+          <planeGeometry args={[0.8, 2]} />
+          <meshStandardMaterial color="#ffffff" />
+        </mesh>
       ))}
       {[-5, -3, -1, 1, 3, 5].map((x, i) => (
-         <mesh key={`s_z_${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.02, 7.5]}>
-            <planeGeometry args={[0.8, 2]} />
-            <meshStandardMaterial color="#ffffff" />
-         </mesh>
+        <mesh
+          key={`s_z_${i}`}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[x, 0.02, 7.5]}
+        >
+          <planeGeometry args={[0.8, 2]} />
+          <meshStandardMaterial color="#ffffff" />
+        </mesh>
       ))}
       {[-5, -3, -1, 1, 3, 5].map((z, i) => (
-         <mesh key={`e_z_${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[7.5, 0.02, z]}>
-            <planeGeometry args={[2, 0.8]} />
-            <meshStandardMaterial color="#ffffff" />
-         </mesh>
+        <mesh
+          key={`e_z_${i}`}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[7.5, 0.02, z]}
+        >
+          <planeGeometry args={[2, 0.8]} />
+          <meshStandardMaterial color="#ffffff" />
+        </mesh>
       ))}
       {[-5, -3, -1, 1, 3, 5].map((z, i) => (
-         <mesh key={`w_z_${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[-7.5, 0.02, z]}>
-            <planeGeometry args={[2, 0.8]} />
-            <meshStandardMaterial color="#ffffff" />
-         </mesh>
+        <mesh
+          key={`w_z_${i}`}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[-7.5, 0.02, z]}
+        >
+          <planeGeometry args={[2, 0.8]} />
+          <meshStandardMaterial color="#ffffff" />
+        </mesh>
       ))}
       <EnvironmentDetails />
     </group>
@@ -303,15 +445,17 @@ export default function World({ logic }) {
   const { phase, queues, removeVehicleFromQueue } = logic;
 
   const getSignalState = (dir) => {
-     if (dir === 'N' || dir === 'S') {
-        if (phase === 'NS_GREEN') return 'GREEN';
-        if (phase === 'NS_YELLOW') return 'YELLOW';
-        return 'RED';
-     } else {
-        if (phase === 'EW_GREEN') return 'GREEN';
-        if (phase === 'EW_YELLOW') return 'YELLOW';
-        return 'RED';
-     }
+    const currentDir = phase[0];
+
+    if (phase.includes("GREEN")) {
+      return dir === currentDir ? "GREEN" : "RED";
+    }
+
+    if (phase.includes("YELLOW")) {
+      return dir === currentDir ? "YELLOW" : "RED";
+    }
+
+    return "RED";
   };
 
   const lanesLayout = {
@@ -320,52 +464,90 @@ export default function World({ logic }) {
       startPos: [-3, 0, 0],
       rotation: [0, 0, 0],
       lightPos: [-8, 0, -8],
-      lightRot: [0, Math.PI / 2, 0]
+      lightRot: [0, Math.PI / 2, 0],
     },
     S: {
       color: "#10b981",
       startPos: [3, 0, 0],
       rotation: [0, Math.PI, 0],
       lightPos: [8, 0, 8],
-      lightRot: [0, -Math.PI / 2, 0]
+      lightRot: [0, -Math.PI / 2, 0],
     },
     E: {
       color: "#f59e0b",
       startPos: [0, 0, -3],
       rotation: [0, -Math.PI / 2, 0],
       lightPos: [8, 0, -8],
-      lightRot: [0, Math.PI, 0]
+      lightRot: [0, Math.PI, 0],
     },
     W: {
       color: "#ef4444",
       startPos: [0, 0, 3],
       rotation: [0, Math.PI / 2, 0],
       lightPos: [-8, 0, 8],
-      lightRot: [0, 0, 0]
-    }
+      lightRot: [0, 0, 0],
+    },
   };
 
   return (
     <div className="canvas-container">
       <Canvas shadows camera={{ position: [30, 25, 30], fov: 45 }}>
-        <color attach="background" args={['#8fb3ce']} />
+        <color attach="background" args={["#8fb3ce"]} />
         <ambientLight intensity={0.6} color="#e0f0ff" />
-        <directionalLight castShadow position={[40, 50, 20]} intensity={1.2} color="#fffaed" />
-        <pointLight position={[0, 15, 0]} intensity={1.5} color="#fff" distance={40} />
+        <directionalLight
+          castShadow
+          position={[40, 50, 20]}
+          intensity={1.2}
+          color="#fffaed"
+        />
+        <pointLight
+          position={[0, 15, 0]}
+          intensity={1.5}
+          color="#fff"
+          distance={40}
+        />
         <TexturedRoad />
         {Object.keys(lanesLayout).map((dirId) => {
           const layout = lanesLayout[dirId];
           const signalState = getSignalState(dirId);
-          const queue = queues[dirId] || [];
+
+          const lanes = queues[dirId] || {
+            left: [],
+            straight: [],
+            right: [],
+          };
+
           return (
             <group key={dirId}>
-              <TrafficLight position={layout.lightPos} rotation={layout.lightRot} signalState={signalState} />
-              <LaneVehicles queue={queue} signalState={signalState} layout={layout} directionId={dirId} removeVehicle={removeVehicleFromQueue} />
+              <TrafficLight
+                position={layout.lightPos}
+                rotation={layout.lightRot}
+                signalState={signalState}
+              />
+
+              <LaneVehicles
+                lanes={lanes}
+                signalState={signalState}
+                layout={layout}
+                directionId={dirId}
+                removeVehicle={removeVehicleFromQueue}
+              />
             </group>
           );
         })}
-        <ContactShadows position={[0, -0.09, 0]} opacity={0.5} scale={80} blur={2.5} far={4.5} />
-        <OrbitControls makeDefault autoRotate autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 2.2} />
+        <ContactShadows
+          position={[0, -0.09, 0]}
+          opacity={0.5}
+          scale={80}
+          blur={2.5}
+          far={4.5}
+        />
+        <OrbitControls
+          makeDefault
+          autoRotate
+          autoRotateSpeed={0.3}
+          maxPolarAngle={Math.PI / 2.2}
+        />
         <Environment preset="city" />
       </Canvas>
     </div>

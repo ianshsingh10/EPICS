@@ -117,16 +117,35 @@ function LaneVehicles({
   const meshRefs = useRef({});
   const posData = useRef({});
 
+  // Note: Based on your layout, "left" makes a Right Turn (outer lane), 
+  // and "right" makes a Left Turn (inner lane).
   const laneOffsets = {
-    left: -2,
+    left: -2, 
     straight: 0,
-    right: 2,
+    right: 2, 
   };
 
   const getBumperOffset = (type) => {
     if (type === "bus") return 3.0;
     if (type === "suv") return 1.9;
     return 1.6;
+  };
+
+  // 1D to 2D Arc Configuration
+  // targetZ explicitly locks the car into the exact middle lane of the destination road
+  const turnConfig = {
+    left: { 
+      turnZ: -6,   // Starts turning exactly at the stop line
+      targetZ: -3, // Exits perfectly into the destination's middle lane
+      radius: 3, 
+      dirX: -1     // Moves towards -X (Right turn from driver's perspective)
+    }, 
+    right: { 
+      turnZ: -2,   // Drives deep into the intersection before turning
+      targetZ: 3,  // Exits perfectly into the destination's middle lane
+      radius: 5, 
+      dirX: 1      // Moves towards +X (Left turn from driver's perspective)
+    } 
   };
 
   useFrame((state, delta) => {
@@ -145,14 +164,12 @@ function LaneVehicles({
         const bumperOffset = getBumperOffset(v.type);
         const stopTarget = stopLineWorldZ - bumperOffset - 0.2;
 
-        // 🚦 SIGNAL STOP LOGIC
         const shouldStop = laneType !== "left" && signalState !== "GREEN";
 
         if (shouldStop && pData.z <= stopTarget) {
           bounds = stopTarget;
         }
 
-        // 🚗 VEHICLE SPACING
         if (index > 0) {
           const frontVehicle = queue[index - 1];
           const frontPData = posData.current[frontVehicle.id];
@@ -167,7 +184,7 @@ function LaneVehicles({
           if (pData.z > bounds) pData.z = bounds;
         }
 
-        if (pData.z > 50) {
+        if (pData.z > 60) {
           removeVehicle(directionId, laneType, v.id);
           delete posData.current[v.id];
           return;
@@ -175,75 +192,41 @@ function LaneVehicles({
 
         const mesh = meshRefs.current[v.id];
         if (mesh) {
-          if (pData.z <= 0) {
+          const startX = laneOffsets[laneType];
+
+          if (laneType === "straight") {
             mesh.position.z = pData.z;
-            mesh.position.x = laneOffsets[laneType];
+            mesh.position.x = startX;
+            mesh.rotation.y = 0;
           } else {
-            // 🎯 AFTER CROSSING → TURN WITH SPACING CONTROL
-            if (!pData.turned) {
-              pData.turned = 0;
-            }
+            const { turnZ, targetZ, radius, dirX } = turnConfig[laneType];
+            const arcLength = (Math.PI / 2) * radius; 
+            const pivotOffsetX = dirX * radius;
 
-            const turnSpeed = 1.5 * delta;
-            const maxTurn = Math.PI / 2; // 90°
-
-            // 🚗 FRONT VEHICLE CHECK (for overlap prevention)
-            let frontVehicle = null;
-            let frontPData = null;
-
-            if (index > 0) {
-              frontVehicle = queue[index - 1];
-              frontPData = posData.current[frontVehicle.id];
-            }
-
-            const turnSpacing = frontVehicle?.type === "bus" ? 6.5 : 4.5;
-
-            if (!pData.progress) pData.progress = pData.z;
-            if (frontPData && !frontPData.progress)
-              frontPData.progress = frontPData.z;
-
-            const tooClose =
-              frontPData && frontPData.progress - pData.progress < turnSpacing;
-
-            if (laneType === "left") {
-              if (!tooClose) {
-                if (pData.turned < maxTurn) {
-                  const step = Math.min(turnSpeed, maxTurn - pData.turned);
-                  mesh.rotation.y += step;
-                  pData.turned += step;
-
-                  if (pData.turned >= maxTurn) {
-                    mesh.rotation.y =
-                      Math.round(mesh.rotation.y / maxTurn) * maxTurn;
-                  }
-                } else {
-                  mesh.position.x -= speed * delta;
-                }
-              }
-              mesh.position.z = 0;
-
-              // 🚦 RIGHT TURN
-            } else if (laneType === "right") {
-              if (!tooClose) {
-                if (pData.turned < maxTurn) {
-                  const step = Math.min(turnSpeed, maxTurn - pData.turned);
-                  mesh.rotation.y -= step;
-                  pData.turned += step;
-
-                  if (pData.turned >= maxTurn) {
-                    mesh.rotation.y =
-                      Math.round(mesh.rotation.y / maxTurn) * maxTurn;
-                  }
-                } else {
-                  mesh.position.x += speed * delta;
-                }
-              }
-              mesh.position.z = 0;
-
-              // 🚗 STRAIGHT
-            } else {
+            if (pData.z <= turnZ) {
+              // SEGMENT 1: Straight Approach
               mesh.position.z = pData.z;
-              mesh.position.x = laneOffsets[laneType];
+              mesh.position.x = startX;
+              mesh.rotation.y = 0;
+            } else if (pData.z <= turnZ + arcLength) {
+              // SEGMENT 2: The Arc (Perfectly maps to targetZ)
+              const arcDist = pData.z - turnZ;
+              const theta = arcDist / radius; // 0 to PI/2
+              
+              const pivotX = startX + pivotOffsetX;
+              const pivotZ = turnZ;
+
+              mesh.position.x = pivotX - pivotOffsetX * Math.cos(theta);
+              mesh.position.z = pivotZ + radius * Math.sin(theta);
+              mesh.rotation.y = dirX * theta; 
+            } else {
+              // SEGMENT 3: Straight Exit (Locked into the correct lane)
+              const exitDist = pData.z - (turnZ + arcLength);
+              const pivotX = startX + pivotOffsetX;
+
+              mesh.position.x = pivotX + dirX * exitDist;
+              mesh.position.z = targetZ; // Mathematically locked to the target lane
+              mesh.rotation.y = dirX * (Math.PI / 2);
             }
           }
 

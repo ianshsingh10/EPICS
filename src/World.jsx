@@ -141,7 +141,7 @@ function LaneVehicles({
       dirX: -1     // Moves towards -X (Right turn from driver's perspective)
     }, 
     right: { 
-      turnZ: -2,   // Drives deep into the intersection before turning
+      turnZ: -2,   
       targetZ: 3,  // Exits perfectly into the destination's middle lane
       radius: 5, 
       dirX: 1      // Moves towards +X (Left turn from driver's perspective)
@@ -149,7 +149,7 @@ function LaneVehicles({
   };
 
   useFrame((state, delta) => {
-    const speed = 15;
+    const speed = 5; 
     const stopLineWorldZ = -6.0;
 
     Object.entries(lanes || {}).forEach(([laneType, queue]) => {
@@ -204,14 +204,12 @@ function LaneVehicles({
             const pivotOffsetX = dirX * radius;
 
             if (pData.z <= turnZ) {
-              // SEGMENT 1: Straight Approach
               mesh.position.z = pData.z;
               mesh.position.x = startX;
               mesh.rotation.y = 0;
             } else if (pData.z <= turnZ + arcLength) {
-              // SEGMENT 2: The Arc (Perfectly maps to targetZ)
               const arcDist = pData.z - turnZ;
-              const theta = arcDist / radius; // 0 to PI/2
+              const theta = arcDist / radius;
               
               const pivotX = startX + pivotOffsetX;
               const pivotZ = turnZ;
@@ -220,12 +218,11 @@ function LaneVehicles({
               mesh.position.z = pivotZ + radius * Math.sin(theta);
               mesh.rotation.y = dirX * theta; 
             } else {
-              // SEGMENT 3: Straight Exit (Locked into the correct lane)
               const exitDist = pData.z - (turnZ + arcLength);
               const pivotX = startX + pivotOffsetX;
 
               mesh.position.x = pivotX + dirX * exitDist;
-              mesh.position.z = targetZ; // Mathematically locked to the target lane
+              mesh.position.z = targetZ;
               mesh.rotation.y = dirX * (Math.PI / 2);
             }
           }
